@@ -37,7 +37,7 @@ const config: JestConfigWithTsJest = {
 
   transformIgnorePatterns: ["/node_modules/(?!nanoid|langchain|@langchain)/"],
 
-  testPathIgnorePatterns: ["/node_modules/", "/dist/"],
+  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/\\._[^/]+$/"],
 };
 
 export default config;

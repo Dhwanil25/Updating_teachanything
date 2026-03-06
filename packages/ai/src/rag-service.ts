@@ -68,6 +68,10 @@ export class RAGService {
         case "application/msword":
           return await this.extractWord(buffer);
 
+        case "application/rtf":
+        case "text/rtf":
+          return await this.extractRTF(buffer);
+
         case "text/plain":
         case "text/markdown":
         case "text/csv":
@@ -152,6 +156,33 @@ export class RAGService {
     } catch (error) {
       console.error("Word extraction error:", error);
       throw new Error("Failed to extract Word document content");
+    }
+  }
+
+  /**
+   * Extract text from RTF files using officeparser.
+   * Handles all RTF control words, \uc replacement chars, and \* destinations correctly.
+   */
+  private async extractRTF(buffer: Buffer): Promise<string> {
+    try {
+      // officeparser accepts Buffer directly and supports RTF natively.
+      // parseOffice returns an OfficeParserAST; call .toText() for plain text.
+      const { parseOffice } = await import("officeparser");
+      const ast = await parseOffice(buffer);
+      const plainText = ast.toText();
+
+      const sanitizedText = this.sanitizeText(plainText);
+
+      if (!sanitizedText.trim()) {
+        throw new Error("RTF document contains no readable text content");
+      }
+
+      return sanitizedText;
+    } catch (error) {
+      console.error("RTF extraction error:", error);
+      throw new Error(
+        `Failed to extract RTF content: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -263,9 +294,9 @@ export class RAGService {
    * Re-rank chunks by similarity score
    */
   rerank(
-    chunks: Array<{ content: string; similarity: number; [key: string]: any }>,
+    chunks: Array<{ content: string; similarity: number;[key: string]: any }>,
     topK: number = 5,
-  ): Array<{ content: string; similarity: number; [key: string]: any }> {
+  ): Array<{ content: string; similarity: number;[key: string]: any }> {
     return chunks.sort((a, b) => b.similarity - a.similarity).slice(0, topK);
   }
 

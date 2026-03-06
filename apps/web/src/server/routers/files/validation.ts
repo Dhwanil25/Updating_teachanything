@@ -8,6 +8,8 @@ export const SUPPORTED_FILE_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/msword",
+  "application/rtf",
+  "text/rtf",
   "text/plain",
   "text/markdown",
   "application/json",
@@ -23,6 +25,7 @@ export const EXTENSION_MIME_MAP: Record<string, string[]> = {
   docx: [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ],
+  rtf: ["application/rtf", "text/rtf"],
   txt: ["text/plain"],
   md: ["text/markdown"],
   markdown: ["text/markdown"],
@@ -38,6 +41,8 @@ export const FILE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
     "Word (.docx)",
   "application/msword": "Word (.doc)",
+  "application/rtf": "RTF",
+  "text/rtf": "RTF",
   "text/plain": "Text",
   "text/markdown": "Markdown",
   "application/json": "JSON",
@@ -105,7 +110,7 @@ export function validateFileType(fileType: string): void {
     const displayName = FILE_TYPE_DISPLAY_NAMES[fileType] || fileType;
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Unsupported file type: ${displayName}. Supported types: PDF, Word (.doc, .docx), Text, Markdown, JSON, CSV`,
+      message: `Unsupported file type: ${displayName}. Supported types: PDF, Word (.doc, .docx), RTF, Text, Markdown, JSON, CSV`,
     });
   }
 }
