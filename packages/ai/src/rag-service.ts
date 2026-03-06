@@ -68,6 +68,10 @@ export class RAGService {
         case "application/msword":
           return await this.extractWord(buffer);
 
+        case "application/rtf":
+        case "text/rtf":
+          return await this.extractRTF(buffer);
+
         case "text/plain":
         case "text/markdown":
         case "text/csv":
@@ -153,6 +157,162 @@ export class RAGService {
       console.error("Word extraction error:", error);
       throw new Error("Failed to extract Word document content");
     }
+  }
+
+  /**
+   * Extract text from RTF files
+   */
+  private async extractRTF(buffer: Buffer): Promise<string> {
+    try {
+      const rtfHeader = buffer.subarray(0, 5).toString("ascii");
+      if (!rtfHeader.startsWith("{\\rtf")) {
+        throw new Error("Invalid RTF format: missing RTF header");
+      }
+
+      const rtfContent = buffer.toString("latin1");
+      const plainText = this.stripRTF(rtfContent);
+      const sanitizedText = this.sanitizeText(plainText);
+
+      if (!sanitizedText) {
+        throw new Error("RTF document contains no readable text content");
+      }
+
+      return sanitizedText;
+    } catch (error) {
+      console.error("RTF extraction error:", error);
+      throw new Error(
+        `Failed to extract RTF content: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Strip RTF control words and formatting to extract plain text
+   */
+  private stripRTF(rtf: string): string {
+    const destinationGroups = new Set([
+      "fonttbl", "colortbl", "stylesheet", "info", "pict",
+      "header", "footer", "headerl", "headerr", "headerf",
+      "footerl", "footerr", "footerf", "object", "blipuid",
+    ]);
+
+    let output = "";
+    let depth = 0;
+    let skipDepth = -1;
+    let i = 0;
+
+    while (i < rtf.length) {
+      const ch = rtf[i]!;
+
+      if (ch === "{") {
+        depth++;
+        i++;
+        continue;
+      }
+
+      if (ch === "}") {
+        if (depth === skipDepth) {
+          skipDepth = -1;
+        }
+        depth--;
+        i++;
+        continue;
+      }
+
+      if (skipDepth !== -1 && depth >= skipDepth) {
+        i++;
+        continue;
+      }
+
+      if (ch === "\\") {
+        i++;
+        if (i >= rtf.length) break;
+
+        const next = rtf[i]!;
+
+        if (next === "'" && i + 2 < rtf.length) {
+          const hex = rtf.substring(i + 1, i + 3);
+          output += String.fromCharCode(parseInt(hex, 16));
+          i += 3;
+          continue;
+        }
+
+        if (next === "u" && i + 1 < rtf.length) {
+          const match = rtf.substring(i).match(/^u(-?\d+)/);
+          if (match) {
+            const code = parseInt(match[1]!, 10);
+            output += code < 0
+              ? String.fromCharCode(code + 65536)
+              : String.fromCharCode(code);
+            i += match[0].length;
+            if (i < rtf.length && rtf[i] === " ") i++;
+            continue;
+          }
+        }
+
+        if (next === "\n" || next === "\r") {
+          output += "\n";
+          i++;
+          continue;
+        }
+
+        if (next === "\\" || next === "{" || next === "}") {
+          output += next;
+          i++;
+          continue;
+        }
+
+        let word = "";
+        while (i < rtf.length && /[a-zA-Z]/.test(rtf[i]!)) {
+          word += rtf[i]!;
+          i++;
+        }
+
+        // Skip optional numeric parameter
+        if (i < rtf.length && /[-\d]/.test(rtf[i]!)) {
+          while (i < rtf.length && /[-\d]/.test(rtf[i]!)) i++;
+        }
+
+        // Skip single trailing space after control word
+        if (i < rtf.length && rtf[i] === " ") i++;
+
+        if (destinationGroups.has(word)) {
+          skipDepth = depth;
+          continue;
+        }
+
+        if (word === "par" || word === "line") {
+          output += "\n";
+        } else if (word === "tab") {
+          output += "\t";
+        } else if (word === "emdash") {
+          output += "\u2014";
+        } else if (word === "endash") {
+          output += "\u2013";
+        } else if (word === "lquote") {
+          output += "\u2018";
+        } else if (word === "rquote") {
+          output += "\u2019";
+        } else if (word === "ldblquote") {
+          output += "\u201C";
+        } else if (word === "rdblquote") {
+          output += "\u201D";
+        } else if (word === "bullet") {
+          output += "\u2022";
+        }
+
+        continue;
+      }
+
+      output += ch;
+      i++;
+    }
+
+    return output
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   /**

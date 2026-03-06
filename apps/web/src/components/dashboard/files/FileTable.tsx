@@ -521,7 +521,7 @@ export function FileTable<T extends BaseFile>({
   const hasCheckbox = showCheckbox && onSelectAll;
   const hasCreated = showCreatedDate;
   const fixedWidth =
-    (hasCheckbox ? 3 : 0) + 10 + 10 + 20 + (hasCreated ? 15 : 0) + 12;
+    (hasCheckbox ? 3 : 0) + 12 + 8 + 20 + (hasCreated ? 15 : 0) + 12;
   const fileNameWidth = 100 - fixedWidth;
 
   return (
@@ -532,8 +532,8 @@ export function FileTable<T extends BaseFile>({
           <colgroup>
             {hasCheckbox && <col style={{ width: "3%" }} />}
             <col style={{ width: `${fileNameWidth}%` }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "8%" }} />
             <col style={{ width: "20%" }} />
             {hasCreated && <col style={{ width: "15%" }} />}
             <col style={{ width: "12%" }} />

@@ -38,6 +38,7 @@ uploads/
 
 # Misc
 .DS_Store
+._*
 *.pem
 
 # playwright mcp files
