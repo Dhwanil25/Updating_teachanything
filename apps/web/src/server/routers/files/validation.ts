@@ -14,6 +14,10 @@ export const SUPPORTED_FILE_TYPES = [
   "text/markdown",
   "application/json",
   "text/csv",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/tiff",
 ] as const;
 
 /**
@@ -31,6 +35,12 @@ export const EXTENSION_MIME_MAP: Record<string, string[]> = {
   markdown: ["text/markdown"],
   json: ["application/json"],
   csv: ["text/csv"],
+   jpg: ["image/jpeg"],
+   jpeg: ["image/jpeg"],
+   png: ["image/png"],
+   webp: ["image/webp"],
+   tiff: ["image/tiff"],
+   tif: ["image/tiff"],
 } as const;
 
 /**
@@ -47,6 +57,10 @@ export const FILE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text/markdown": "Markdown",
   "application/json": "JSON",
   "text/csv": "CSV",
+  "image/jpeg": "JPEG",
+  "image/png": "PNG",
+  "image/webp": "WEBP",
+  "image/tiff": "TIFF",
 };
 
 /**
@@ -110,7 +124,7 @@ export function validateFileType(fileType: string): void {
     const displayName = FILE_TYPE_DISPLAY_NAMES[fileType] || fileType;
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Unsupported file type: ${displayName}. Supported types: PDF, Word (.doc, .docx), RTF, Text, Markdown, JSON, CSV`,
+      message: `Unsupported file type: ${displayName}. Supported types: PDF, Word (.doc, .docx), RTF, Text, Markdown, JSON, CSV, Images (JPG, JPEG, PNG, WEBP, TIFF)`,
     });
   }
 }

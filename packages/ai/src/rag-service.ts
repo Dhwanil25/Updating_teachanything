@@ -72,6 +72,12 @@ export class RAGService {
         case "text/rtf":
           return await this.extractRTF(buffer);
 
+        case "image/jpeg":
+        case "image/png":
+        case "image/webp":
+        case "image/tiff":
+          return await this.extractTextFromImage(buffer);
+
         case "text/plain":
         case "text/markdown":
         case "text/csv":
@@ -124,7 +130,8 @@ export class RAGService {
       const sanitizedText = this.sanitizeText(data.text);
 
       if (!sanitizedText) {
-        throw new Error("PDF contains no readable text content");
+        // Fallback: try OCR for scanned PDFs
+        return await this.extractScannedPDF(buffer);
       }
 
       return sanitizedText;
@@ -182,6 +189,94 @@ export class RAGService {
       console.error("RTF extraction error:", error);
       throw new Error(
         `Failed to extract RTF content: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Extract text from image files using OCR
+   */
+  private async extractTextFromImage(buffer: Buffer): Promise<string> {
+    try {
+      console.log("[RAGService] Starting extractTextFromImage...");
+      if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+        throw new Error("Invalid image buffer");
+      }
+
+      console.log("[RAGService] Importing node-tesseract-ocr...");
+      const tesseract = await import("node-tesseract-ocr");
+
+      // node-tesseract-ocr requires a config object
+      const config = {
+        lang: "eng",
+        oem: 1,
+        psm: 3,
+      };
+
+      console.log("[RAGService] Running Tesseract recognize...");
+      const text = await tesseract.recognize(buffer, config);
+
+      const sanitizedText = this.sanitizeText(text);
+
+      if (!sanitizedText) {
+        throw new Error("Image contains no readable text content");
+      }
+
+      console.log("[RAGService] Image text extraction successful.");
+      return sanitizedText;
+    } catch (error) {
+      console.error("[RAGService] Image OCR error:", error);
+      throw new Error(
+        `Failed to extract text from image: ${error instanceof Error ? error.message : String(error)}. Make sure tesseract-ocr is installed on your system.`,
+      );
+    }
+  }
+
+  /**
+   * Fallback OCR for scanned PDFs: convert pages to images and run OCR
+   */
+  private async extractScannedPDF(buffer: Buffer): Promise<string> {
+    try {
+      console.log("[RAGService] Starting extractScannedPDF fallback...");
+      if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+        throw new Error("Invalid PDF buffer for OCR fallback");
+      }
+
+      console.log("[RAGService] Importing pdf-to-img and node-tesseract-ocr...");
+      const [{ pdf }, tesseract] = await Promise.all([
+        import("pdf-to-img") as Promise<{ pdf: (input: string | Buffer | Uint8Array, options?: { scale?: number }) => Promise<AsyncIterable<Buffer>> }>,
+        import("node-tesseract-ocr")
+      ]);
+
+      console.log("[RAGService] Converting PDF to images...");
+      // Convert PDF pages to images
+      const document = await pdf(buffer, { scale: 2 });
+
+      let combinedText = "";
+      const config = { lang: "eng", oem: 1, psm: 3 };
+
+      console.log("[RAGService] Processing distinct PDF pages...");
+      for await (const pageImage of document as AsyncIterable<Buffer>) {
+        console.log("[RAGService] Running OCR on PDF page...");
+        const text = await tesseract.recognize(pageImage, config);
+
+        const sanitizedPageText = this.sanitizeText(text);
+        if (sanitizedPageText) {
+          combinedText += (combinedText ? "\n\n" : "") + sanitizedPageText;
+        }
+      }
+
+      const sanitizedText = this.sanitizeText(combinedText);
+      if (!sanitizedText) {
+        throw new Error("Scanned PDF contains no readable text content");
+      }
+
+      console.log("[RAGService] Scanned PDF extraction successful.");
+      return sanitizedText;
+    } catch (error) {
+      console.error("[RAGService] Scanned PDF OCR error details:", error);
+      throw new Error(
+        `Failed to extract scanned PDF content: ${error instanceof Error ? error.message : String(error)}. Make sure tesseract-ocr is installed on your system.`,
       );
     }
   }
@@ -423,9 +518,9 @@ export class RAGService {
    * Re-rank chunks by similarity score
    */
   rerank(
-    chunks: Array<{ content: string; similarity: number; [key: string]: any }>,
+    chunks: Array<{ content: string; similarity: number;[key: string]: any }>,
     topK: number = 5,
-  ): Array<{ content: string; similarity: number; [key: string]: any }> {
+  ): Array<{ content: string; similarity: number;[key: string]: any }> {
     return chunks.sort((a, b) => b.similarity - a.similarity).slice(0, topK);
   }
 

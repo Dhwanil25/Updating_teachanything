@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Download,
   Eye,
+  BookOpen,
 } from "lucide-react";
 import {
   formatFileSize,
@@ -26,6 +27,7 @@ import {
   getFileTypeDisplayName,
 } from "./file-constants";
 import { FileStatusBadge } from "./FileStatusBadge";
+import { FileTextPreviewDialog } from "./FileTextPreviewDialog";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -42,11 +44,11 @@ type BaseFile = {
     processedAt?: string;
     processingProgress?: {
       stage:
-        | "downloading"
-        | "extracting"
-        | "chunking"
-        | "embedding"
-        | "storing";
+      | "downloading"
+      | "extracting"
+      | "chunking"
+      | "embedding"
+      | "storing";
       percentage: number;
       currentChunk?: number;
       totalChunks?: number;
@@ -67,8 +69,8 @@ function useFileActions<T extends BaseFile>(file: T) {
     file.processingStatus === "processing" &&
     file.metadata?.processingProgress?.lastUpdatedAt &&
     Date.now() -
-      new Date(file.metadata.processingProgress.lastUpdatedAt).getTime() >
-      30 * 60 * 1000; // 30 minutes
+    new Date(file.metadata.processingProgress.lastUpdatedAt).getTime() >
+    30 * 60 * 1000; // 30 minutes
 
   const canRetry =
     file.processingStatus === "failed" ||
@@ -139,6 +141,7 @@ function FileActionButtons<T extends BaseFile>({
   isViewable,
   isDownloading,
   handleFileClick,
+  onViewText,
 }: {
   file: T;
   actionType: ActionType;
@@ -152,11 +155,27 @@ function FileActionButtons<T extends BaseFile>({
   isViewable: boolean;
   isDownloading: boolean;
   handleFileClick: (e: React.MouseEvent, forceDownload?: boolean) => void;
+  onViewText?: () => void;
 }) {
   return (
     <>
       {canView && (
         <>
+          {/* View extracted text button - for all completed files */}
+          {onViewText && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewText();
+              }}
+              className="h-8 w-8 text-muted-foreground hover:text-purple-600 hover:bg-purple-50"
+              title="View extracted text"
+            >
+              <BookOpen className="h-4 w-4" />
+            </Button>
+          )}
           {isViewable && (
             <Button
               variant="ghost"
@@ -286,78 +305,90 @@ function FileTableRow<T extends BaseFile>({
   showCreatedDate = false,
 }: FileTableRowProps<T>) {
   const actions = useFileActions(file);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
-    <TableRow
-      className="cursor-pointer hover:bg-muted/50"
-      onClick={() => {
-        if (showCheckbox && onToggleSelect) {
-          onToggleSelect(file.id);
-        }
-      }}
-    >
-      {showCheckbox && onToggleSelect && (
-        <TableCell onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onToggleSelect(file.id);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-            aria-label={`Select ${file.fileName}`}
-          />
-        </TableCell>
-      )}
-      <TableCell>
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-            <FileText className="h-4 w-4 text-blue-600" />
+    <>
+      <TableRow
+        className="cursor-pointer hover:bg-muted/50"
+        onClick={() => {
+          if (showCheckbox && onToggleSelect) {
+            onToggleSelect(file.id);
+          }
+        }}
+      >
+        {showCheckbox && onToggleSelect && (
+          <TableCell onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect(file.id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+              aria-label={`Select ${file.fileName}`}
+            />
+          </TableCell>
+        )}
+        <TableCell>
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <FileText className="h-4 w-4 text-blue-600" />
+            </div>
+            <span className="font-medium truncate">{file.fileName}</span>
           </div>
-          <span className="font-medium truncate">{file.fileName}</span>
-        </div>
-      </TableCell>
-      <TableCell>
-        <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {getFileTypeDisplayName(file.fileType)}
-        </span>
-      </TableCell>
-      <TableCell>
-        <span className="text-sm whitespace-nowrap">
-          {formatFileSize(file.fileSize)}
-        </span>
-      </TableCell>
-      <TableCell>
-        <FileStatusBadge
-          status={file.processingStatus}
-          metadata={file.metadata}
-          showProgress={true}
-          size="sm"
-        />
-      </TableCell>
-      {showCreatedDate && file.createdAt && (
+        </TableCell>
         <TableCell>
           <span className="text-sm text-muted-foreground whitespace-nowrap">
-            {formatDate(file.createdAt)}
+            {getFileTypeDisplayName(file.fileType)}
           </span>
         </TableCell>
-      )}
-      <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
-        <div className="flex items-center justify-end gap-5">
-          <FileActionButtons
-            file={file}
-            actionType={actionType}
-            onAction={onAction}
-            actionDisabled={actionDisabled}
-            onRetry={onRetry}
-            retryDisabled={retryDisabled}
-            {...actions}
+        <TableCell>
+          <span className="text-sm whitespace-nowrap">
+            {formatFileSize(file.fileSize)}
+          </span>
+        </TableCell>
+        <TableCell>
+          <FileStatusBadge
+            status={file.processingStatus}
+            metadata={file.metadata}
+            showProgress={true}
+            size="sm"
           />
-        </div>
-      </TableCell>
-    </TableRow>
+        </TableCell>
+        {showCreatedDate && file.createdAt && (
+          <TableCell>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {formatDate(file.createdAt)}
+            </span>
+          </TableCell>
+        )}
+        <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
+          <div className="flex items-center justify-end gap-5">
+            <FileActionButtons
+              file={file}
+              actionType={actionType}
+              onAction={onAction}
+              actionDisabled={actionDisabled}
+              onRetry={onRetry}
+              retryDisabled={retryDisabled}
+              onViewText={() => setPreviewOpen(true)}
+              {...actions}
+            />
+          </div>
+        </TableCell>
+      </TableRow>
+      {previewOpen && (
+        <FileTextPreviewDialog
+          fileId={file.id}
+          fileName={file.fileName}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+        />
+      )}
+    </>
   );
 }
 
@@ -375,76 +406,88 @@ function FileCardMobile<T extends BaseFile>({
   showCreatedDate = false,
 }: FileTableRowProps<T>) {
   const actions = useFileActions(file);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
-    <div
-      className="border border-border/60 rounded-lg p-4 bg-card space-y-3"
-      onClick={() => {
-        if (showCheckbox && onToggleSelect) {
-          onToggleSelect(file.id);
-        }
-      }}
-    >
-      {/* Top row: checkbox + icon + name */}
-      <div className="flex items-center gap-3">
-        {showCheckbox && onToggleSelect && (
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onToggleSelect(file.id);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-            aria-label={`Select ${file.fileName}`}
-          />
-        )}
-        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-          <FileText className="h-4 w-4 text-blue-600" />
+    <>
+      <div
+        className="border border-border/60 rounded-lg p-4 bg-card space-y-3"
+        onClick={() => {
+          if (showCheckbox && onToggleSelect) {
+            onToggleSelect(file.id);
+          }
+        }}
+      >
+        {/* Top row: checkbox + icon + name */}
+        <div className="flex items-center gap-3">
+          {showCheckbox && onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect(file.id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+              aria-label={`Select ${file.fileName}`}
+            />
+          )}
+          <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="h-4 w-4 text-blue-600" />
+          </div>
+          <span className="font-medium truncate flex-1">{file.fileName}</span>
         </div>
-        <span className="font-medium truncate flex-1">{file.fileName}</span>
-      </div>
 
-      {/* Metadata badges */}
-      <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-        <span className="bg-muted px-2 py-0.5 rounded">
-          {getFileTypeDisplayName(file.fileType)}
-        </span>
-        <span className="bg-muted px-2 py-0.5 rounded">
-          {formatFileSize(file.fileSize)}
-        </span>
-        {showCreatedDate && file.createdAt && (
+        {/* Metadata badges */}
+        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
           <span className="bg-muted px-2 py-0.5 rounded">
-            {formatDate(file.createdAt)}
+            {getFileTypeDisplayName(file.fileType)}
           </span>
-        )}
-      </div>
+          <span className="bg-muted px-2 py-0.5 rounded">
+            {formatFileSize(file.fileSize)}
+          </span>
+          {showCreatedDate && file.createdAt && (
+            <span className="bg-muted px-2 py-0.5 rounded">
+              {formatDate(file.createdAt)}
+            </span>
+          )}
+        </div>
 
-      {/* Status + actions row */}
-      <div className="flex items-center justify-between gap-2">
-        <FileStatusBadge
-          status={file.processingStatus}
-          metadata={file.metadata}
-          showProgress={true}
-          size="sm"
-        />
-        <div
-          className="flex items-center gap-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <FileActionButtons
-            file={file}
-            actionType={actionType}
-            onAction={onAction}
-            actionDisabled={actionDisabled}
-            onRetry={onRetry}
-            retryDisabled={retryDisabled}
-            {...actions}
+        {/* Status + actions row */}
+        <div className="flex items-center justify-between gap-2">
+          <FileStatusBadge
+            status={file.processingStatus}
+            metadata={file.metadata}
+            showProgress={true}
+            size="sm"
           />
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileActionButtons
+              file={file}
+              actionType={actionType}
+              onAction={onAction}
+              actionDisabled={actionDisabled}
+              onRetry={onRetry}
+              retryDisabled={retryDisabled}
+              onViewText={() => setPreviewOpen(true)}
+              {...actions}
+            />
+          </div>
         </div>
       </div>
-    </div>
+      {previewOpen && (
+        <FileTextPreviewDialog
+          fileId={file.id}
+          fileName={file.fileName}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+        />
+      )}
+    </>
   );
 }
 

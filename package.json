@@ -39,5 +39,8 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "node-tesseract-ocr": "^2.2.1"
+  }
 }
